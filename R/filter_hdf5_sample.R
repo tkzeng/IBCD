@@ -1,6 +1,9 @@
 library(inspre)
 library(tidyverse)
 library(hdf5r)
+library(stringr)
+library(doParallel)
+library(doRNG)
 
 multiple_iv_reg_UV <- function(target, .X, .targets){
   inst_obs <- .targets == target
@@ -30,8 +33,7 @@ multiple_iv_reg_UV <- function(target, .X, .targets){
   # return(beta_se=as.data.frame(c(list(target = target, beta_obs = beta_inst_obs), as.list(c(beta_hat, se_hat)))), U_i=1/n_target*beta_inst_obs**2, V_hat=V_hat)
 }
 
-
-data_dir <- "/home/seong/lr/dontmessup/gwps/"
+data_dir <- "/Users/seongwoohan/Desktop/dontmessup/boostrap/sim_R/true_bootstrap/gwps/onemoretime/"
 rdata_dir <- file.path(data_dir, "rdata")
 xi_dir <- file.path(data_dir, "xi")
 u_dir <- file.path(data_dir, "U")       
@@ -44,13 +46,13 @@ dir.create(u_dir    , recursive = TRUE, showWarnings = FALSE)
 dir.create(v_dir    , recursive = TRUE, showWarnings = FALSE)
 
 # 1. Load your gene list from CSV
-#k562_gwps_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_gwps_normalized_singlecell_01.h5ad"
+k562_gwps_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_gwps_normalized_singlecell_01.h5ad"
 #k562_essential_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_essential_normalized_singlecell_01.h5ad"
 
-k562_gwps_norm_sc_fn <- "/data/long_read/R/35774440"
+#k562_gwps_norm_sc_fn <- "/data/long_read/R/35774440"
 #k562_essential_norm_sc_fn <-"/data/long_read/R/35773075"
 
-gene_list <- read_csv("/data/long_read/R/test.csv", col_names = TRUE)
+gene_list <- read_csv("/Users/seongwoohan/Desktop/inspre_bayes/R/test.csv", col_names = TRUE)
 gene_list <- gene_list$common_genes
 
 # 2. Extract ENSG IDs from the gene list (last part of each string)
@@ -93,16 +95,53 @@ targets_clean <- ifelse(
   sapply(strsplit(targets_raw, "_"), `[`, 2)
 )
 
-core <- parallel::detectCores()
-cl <- makeCluster(core - 20)
-registerDoParallel(cl)
 
-D <- ncol(X)
+X_control <- X[targets_clean == "control", , drop = FALSE]
+# Compute coexpression matrix from control cells
+Sigma <- t(X_control) %*% X_control / nrow(X_control)
+# Elementwise square and zero out the diagonal
+xi <- Sigma^2
+diag(xi) <- 0
+
+write.csv(xi, file = file.path(xi_dir, "xi_true.csv"), row.names = FALSE)
+
+D <- ncol(X) 
+#genes   <- paste0("V", 1L:D) 
+U_diag  <- numeric(D)
+V_sum   <- matrix(0, D, D)         # running total of V̂
+R_hat   <- matrix(0, D, D)
+
+for (i in seq_len(D)) {
+  target <- colnames(X)[i]
+  message("Running IV for target: ", target)
+  res <- multiple_iv_reg_UV(target, X, targets_clean)  # <<<< HERE: use X and targets_clean
+  U_diag[i] <- res$U_i
+  V_sum     <- V_sum + res$V_hat
+  R_hat[i, ] <- unlist(res$beta_se[1, grep("_beta_hat$", names(res$beta_se))])
+}
+
+U <- diag(U_diag)
+V <- V_sum / D
+
+write.csv(R_hat, file = file.path(rdata_dir, "R_true.csv"), row.names = FALSE)
+write.csv(U,      file = file.path(u_dir,     "U_true.csv"),     row.names = FALSE)
+write.csv(V,      file = file.path(v_dir,     "V_true.csv"),     row.names = FALSE)
+
+######################
+# parallel computing #
+#######################
+core <- 8
+cl <- makeCluster(core)
+registerDoParallel(cl)
+registerDoRNG(seed = 42)
+
 num_simulations <- 1000
 
 
 results <- foreach(sim = 1:num_simulations, .options.RNG = 42,
                    .packages = c("inspre", "mc2d", "tidyverse")) %dorng% {
+                     
+                     start_time <- Sys.time()
                      
                      ## 1) stratified bootstrap
                      boot_idx <- unlist(lapply(unique(targets_clean), function(tg) {
@@ -119,46 +158,48 @@ results <- foreach(sim = 1:num_simulations, .options.RNG = 42,
                      xi_bs    <- Sigma_bs^2
                      diag(xi_bs) <- 0
                      
-                     ## 3) IV regression block
-                     R_bs   <- matrix(NA_real_, D, D, dimnames = list(colnames(X), colnames(X)))
-                     U_diag <- numeric(D)
-                     V_sum  <- matrix(0, D, D)
+                     genes      <- colnames(X_bs)  
+                     D_genes    <- length(genes)
+                     R_hat      <- matrix(0, nrow = D_genes, ncol = D_genes)
                      
-                     for (i in seq_len(D)) {
-                       tgt  <- colnames(X)[i]
-                       res  <- multiple_iv_reg_UV(tgt, X_bs, t_bs)
+                     for (i in seq_len(D_genes)) {
+                       target_gene <- genes[i]  
+                       message("Sim ", sim, " – Running IV for target: ", target_gene)
+                       multiple_iv_reg <- inspre:::multiple_iv_reg
+                       res <- multiple_iv_reg(target_gene, X_bs, t_bs)
                        
-                       R_bs[i, ] <- unlist(res$beta_se[grep("_beta_hat$", names(res$beta_se))])
-                       U_diag[i] <- res$U_i
-                       V_sum     <- V_sum + res$V_hat         # accumulate
+                       beta_idx      <- grep("_beta_hat$", names(res))  
+                       R_hat[i, ]    <- as.numeric(res[beta_idx])
+                       
+                       if (i %% 5 == 0 || i == D_genes) {
+                         cat(sprintf("Sim %03d – Gene %s (%d/%d)\n",
+                                     sim, target_gene, i, D_genes),
+                             file = file.path(data_dir, "bootstrap_progress.log"),
+                             append = TRUE)
+                       }
                      }
-                     V_bs <- V_sum / D
-                     U_bs <- diag(U_diag)
                      
-                     ## 4) write to disk (optional)
-                     fn_stub <- sprintf("%03d", sim)
-                     write.csv(R_bs, file.path(rdata_dir, paste0("R_hat_", fn_stub, ".csv")), row.names = FALSE)
-                     write.csv(xi_bs, file.path(xi_dir,   paste0("xi_",     fn_stub, ".csv")), row.names = FALSE)
-                     write.csv(U_bs, file.path(u_dir,  paste0("U_",  fn_stub, ".csv")), row.names = FALSE)
-                     write.csv(V_bs, file.path(v_dir, paste0("V_", fn_stub, ".csv")), row.names = FALSE)
+                     end_time <- Sys.time()
+                     duration <- as.numeric(difftime(end_time, start_time, units = "secs"))
                      
-                     ## 5) return to master
-                     list(R = R_bs, xi = xi_bs, U = U_bs, V = V_bs)
+                     cat(sprintf("Finished bootstrap %03d in %.2f sec\n", sim, duration),
+                         file = file.path(data_dir, "bootstrap_progress.log"), append = TRUE)
                      
+                     write.csv(R_hat, file = file.path(rdata_dir, sprintf("R_hat_%03d.csv", sim)), row.names = FALSE)
+                     write.csv(xi_bs, file = file.path(xi_dir, sprintf("xi_%03d.csv", sim)), row.names = FALSE)
+                     
+                     return(list(R_hat = R_hat, xi = xi_bs))  
                    }
 
 stopCluster(cl)
 
 ## ---------- aggregate ----------
-U_mean  <- Reduce(`+`, lapply(results, `[[`, "U"))  / num_simulations   
-V_mean  <- Reduce(`+`, lapply(results, `[[`, "V"))  / num_simulations  
-R_mean  <- Reduce(`+`, lapply(results, `[[`, "R"))  / num_simulations
-xi_mean <- Reduce(`+`, lapply(results, `[[`, "xi")) / num_simulations
+R_mean  <- Reduce(`+`, lapply(results, `[[`, "R_hat"))  / num_simulations
+xi_mean <- Reduce(`+`, lapply(results, `[[`, "xi"))     / num_simulations
 xi_norm <- xi_mean / sqrt(sum(xi_mean^2))
 
-write.csv(U_mean,  file.path(data_dir, "U_gwps.csv"),  row.names = FALSE)  
-write.csv(V_mean,  file.path(data_dir, "V_gwps.csv"),  row.names = FALSE) 
 write.csv(R_mean, file.path(data_dir, "R_gwps.csv"), row.names = FALSE)
 write.csv(xi_norm, file.path(data_dir, "xi_gwps.csv"), row.names = FALSE)
 #write.csv(R_mean, file.path(data_dir, "R_essential.csv"), row.names=FALSE)
 #write.csv(xi_norm, file.path(data_dir, "xi_essential.csv"), row.names=FALSE)
+
