@@ -103,7 +103,8 @@ Sigma <- t(X_control) %*% X_control / nrow(X_control)
 xi <- Sigma^2
 diag(xi) <- 0
 
-write.csv(xi, file = file.path(xi_dir, "xi_true.csv"), row.names = FALSE)
+xi_norm <- xi / sqrt(sum(xi^2))
+write.csv(xi_norm, file = file.path(xi_dir, "xi_true.csv"), row.names = FALSE)
 
 D <- ncol(X) 
 #genes   <- paste0("V", 1L:D) 
