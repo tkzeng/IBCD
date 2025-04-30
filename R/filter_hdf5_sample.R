@@ -33,7 +33,7 @@ multiple_iv_reg_UV <- function(target, .X, .targets){
   # return(beta_se=as.data.frame(c(list(target = target, beta_obs = beta_inst_obs), as.list(c(beta_hat, se_hat)))), U_i=1/n_target*beta_inst_obs**2, V_hat=V_hat)
 }
 
-data_dir <- "/Users/seongwoohan/Desktop/dontmessup/boostrap/sim_R/true_bootstrap/gwps/onemoretime/"
+data_dir <- "/Users/seongwoohan/Desktop/dontmessup/boostrap/sim_R/true_bootstrap/essential/"
 rdata_dir <- file.path(data_dir, "rdata")
 xi_dir <- file.path(data_dir, "xi")
 u_dir <- file.path(data_dir, "U")       
@@ -46,12 +46,10 @@ dir.create(u_dir    , recursive = TRUE, showWarnings = FALSE)
 dir.create(v_dir    , recursive = TRUE, showWarnings = FALSE)
 
 # 1. Load your gene list from CSV
-k562_gwps_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_gwps_normalized_singlecell_01.h5ad"
-#k562_essential_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_essential_normalized_singlecell_01.h5ad"
+#k562_gwps_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_gwps_normalized_singlecell_01.h5ad"
+k562_essential_norm_sc_fn <- "/Users/seongwoohan/Desktop/inspre_bayes/R/K562_essential_normalized_singlecell_01.h5ad"
 
-#k562_gwps_norm_sc_fn <- "/data/long_read/R/35774440"
-#k562_essential_norm_sc_fn <-"/data/long_read/R/35773075"
-
+# 521 genes
 gene_list <- read_csv("/Users/seongwoohan/Desktop/inspre_bayes/R/test.csv", col_names = TRUE)
 gene_list <- gene_list$common_genes
 
@@ -60,8 +58,8 @@ ensg_ids <- str_extract(gene_list, "ENSG[0-9]{11}")
 
 # 3. Load HDF5 data
 process_start <- Sys.time()
-#hfile_sc <- H5File$new(k562_essential_norm_sc_fn, "r")
-hfile_sc <- H5File$new(k562_gwps_norm_sc_fn, "r")
+hfile_sc <- H5File$new(k562_essential_norm_sc_fn, "r")
+#hfile_sc <- H5File$new(k562_gwps_norm_sc_fn, "r")
 obs <- parse_hdf5_df(hfile_sc, "obs")
 var <- parse_hdf5_df(hfile_sc, "var")
 
@@ -95,11 +93,8 @@ targets_clean <- ifelse(
   sapply(strsplit(targets_raw, "_"), `[`, 2)
 )
 
-
 X_control <- X[targets_clean == "control", , drop = FALSE]
-# Compute coexpression matrix from control cells
 Sigma <- t(X_control) %*% X_control / nrow(X_control)
-# Elementwise square and zero out the diagonal
 xi <- Sigma^2
 diag(xi) <- 0
 
@@ -109,8 +104,9 @@ write.csv(xi_norm, file = file.path(xi_dir, "xi_true.csv"), row.names = FALSE)
 D <- ncol(X) 
 #genes   <- paste0("V", 1L:D) 
 U_diag  <- numeric(D)
-V_sum   <- matrix(0, D, D)         # running total of V̂
+V_sum   <- matrix(0, D, D)         
 R_hat   <- matrix(0, D, D)
+SE_hat <- matrix(0, D, D)
 
 for (i in seq_len(D)) {
   target <- colnames(X)[i]
@@ -119,11 +115,14 @@ for (i in seq_len(D)) {
   U_diag[i] <- res$U_i
   V_sum     <- V_sum + res$V_hat
   R_hat[i, ] <- unlist(res$beta_se[1, grep("_beta_hat$", names(res$beta_se))])
+  SE_hat[i, ] <- unlist(res$beta_se[1, grep("_se_hat$", names(res$beta_se))])
 }
+
 
 U <- diag(U_diag)
 V <- V_sum / D
 
+write.csv(SE_hat, file = file.path(data_dir, "SE_hat.csv"), row.names = FALSE)
 write.csv(R_hat, file = file.path(rdata_dir, "R_true.csv"), row.names = FALSE)
 write.csv(U,      file = file.path(u_dir,     "U_true.csv"),     row.names = FALSE)
 write.csv(V,      file = file.path(v_dir,     "V_true.csv"),     row.names = FALSE)
