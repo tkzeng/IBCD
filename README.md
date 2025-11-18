@@ -24,15 +24,14 @@ python ibcd.py --data /PATH/TO/data.csv \
                --output_dir OUTPUT_FOLDER
 ```
 
-Use `--prior sf` (scale-free) or `--prior er` (Erdős–Rényi) depending on the expected graph structure of your data. If the structure is unknown, we recommend using the **`sf`** prior as a default. For details on all available configuration options, see the **Arguments** section below.
+Use `--prior sf` (scale-free) or `--prior er` (Erdős–Rényi) depending on the expected graph structure of your data. If the structure is unknown, we recommend using the `sf` prior as a default. For details on all available configuration options, see the **Arguments** section below.
 
 
-### Input format ###
+### Input file ###
 
-IBCD takes a single CSV file where each row is a sample, columns `V1, V2, …, Vp` contain expression values, and the final column `target` indicates whether the sample is `control` or belongs to an interventional condition.  
-See the input data example CSV [here](https://github.com/bcbg-bio/IBCD/blob/main/data/input/data.csv).
+IBCD takes a single CSV file where each row is a sample, columns `V1, V2, …, Vp` contain expression values, and the final column `target` indicates whether the sample is `control` or belongs to an interventional condition (e.g., `V1, V2, …, Vp`). See the input data example CSV [here](https://github.com/bcbg-bio/IBCD/blob/main/data/input/data.csv).
 
-#### Example ####
+#### Input format example ####
 
 Control samples appear first; interventional samples follow with a label indicating which experimental condition they belong to.
 
@@ -43,15 +42,15 @@ V1,   V2,   V3,   V4,   V5,   target
 4.76, 5.01, 5.92, 6.41, 6.78, control
 4.88, 5.10, 5.95, 6.38, 6.70, control
 ...
-0.00, 3.36, 4.67, 4.93, 5.44, V5
-0.00, 2.64, 3.93, 4.64, 4.90, V5
-0.00, 2.94, 4.14, 4.97, 5.48, V5
-0.00, 3.24, 4.36, 4.67, 5.13, V5
+3.01, 3.36, 4.67, 4.93, 5.44, V5
+3.82, 2.64, 3.93, 4.64, 4.90, V5
+2.27, 2.94, 4.14, 4.97, 5.48, V5
+2.45, 3.24, 4.36, 4.67, 5.13, V5
 ```
 
 ### Output files ###
 
-IBCD produces three output files See the output files example [here](https://github.com/bcbg-bio/IBCD/tree/main/data/output).
+IBCD produces three output files. See the output files example [here](https://github.com/bcbg-bio/IBCD/tree/main/data/output).
 
 - **G.csv**: Inferred causal graph given as the posterior-mean weighted adjacency matrix.  
 - **pip.csv**: Posterior inclusion probability for each edge, which measures how strongly the posterior supports the existence of an edge. 
