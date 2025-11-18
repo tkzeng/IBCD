@@ -29,7 +29,7 @@ Use `--prior sf` (scale-free) or `--prior er` (Erdős–Rényi) depending on the
 
 ### Input file ###
 
-IBCD takes a single CSV file where each row is a sample, columns `V1, V2, …, Vp` contain expression values, and the final column `target` indicates whether the sample is `control` or belongs to an interventional condition (e.g., `V1, V2, …, Vp`). See the input data example CSV [here](https://github.com/bcbg-bio/IBCD/blob/main/data/input/data.csv).
+IBCD takes a single CSV file where each row is a sample, columns `V1, V2, …, Vp` contain expression values, and the final column `target` indicates whether the sample is `control` or belongs to a specific interventional condition (e.g., `V1`, `V2`, `V3`, …). See the input data example CSV [here](https://github.com/bcbg-bio/IBCD/blob/main/data/input/data.csv).
 
 #### Input format example ####
 
