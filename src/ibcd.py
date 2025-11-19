@@ -144,11 +144,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "IBCD pipeline.\n"
-            "1) Load data.csv (Y_matrix + target)\n"
+            "1) Load data.csv (observation + intervention)\n"
             "2) Run 2SLS\n"
             "3) Choose SF (scale-free) or ER (Erdős–Rényi) empirical prior\n"
-            "4) Fit empricial Bayesian spike-and-slab on matrix normal model\n"
-            "5) Output G draws, posterior mean G, PIP, and LFSR."
+            "4) Fit empirical Bayesian spike-and-slab prior on matrix normal model\n"
+            "5) Output G, PIP, and LFSR.\n"
         )
     )
 

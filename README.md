@@ -1,4 +1,4 @@
-# Iterventional Bayesian Causal Discovery (IBCD)
+# Interventional Bayesian Causal Discovery (IBCD)
 
 IBCD is an empirical Bayesian causal discovery method using interventional data to infer causal graphs with user-selectable scale-free or Erdős–Rényi structural priors. You can read the [IBCD paper](https://arxiv.org/abs/2510.01562) on arXiv.
 
